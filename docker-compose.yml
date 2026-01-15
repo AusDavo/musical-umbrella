@@ -1,0 +1,17 @@
+services:
+  netmon:
+    build: .
+    container_name: docker-netmon
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Uncomment and configure for alerting:
+    # environment:
+    #   - NETMON_ALERT_URL=https://ntfy.sh/your-topic
+    #   - NETMON_ALERT_TYPE=ntfy
+    # For Gotify:
+    #   - NETMON_ALERT_URL=https://gotify.example.com
+    #   - NETMON_ALERT_TYPE=gotify
+    #   - NETMON_GOTIFY_TOKEN=your-app-token
+    # Default command is 'watch', but you can override:
+    # command: scan --quiet
