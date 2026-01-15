@@ -188,5 +188,30 @@ def test_alert() -> None:
         sys.exit(1)
 
 
+@main.command()
+@click.option(
+    "--port",
+    "-p",
+    default=8080,
+    help="Port to run the web server on",
+)
+@click.option(
+    "--host",
+    "-h",
+    default="0.0.0.0",
+    help="Host to bind the web server to",
+)
+def web(port: int, host: str) -> None:
+    """Start the web dashboard."""
+    get_client()
+
+    console.print(f"[bold]Docker Network Monitor[/bold] - Web Dashboard")
+    console.print(f"Starting server on http://{host}:{port}")
+    console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+
+    from netmon.web import run_server
+    run_server(host=host, port=port)
+
+
 if __name__ == "__main__":
     main()

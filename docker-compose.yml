@@ -5,7 +5,13 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    # Uncomment and configure for alerting:
+    ports:
+      - "8080:8080"
+    # Default command is 'web' (dashboard), alternatives:
+    # command: watch          # CLI watch mode with alerts
+    # command: scan --quiet   # One-time scan
+    command: web --port 8080
+    # Uncomment and configure for alerting (used by 'watch' command):
     # environment:
     #   - NETMON_ALERT_URL=https://ntfy.sh/your-topic
     #   - NETMON_ALERT_TYPE=ntfy
@@ -13,5 +19,3 @@ services:
     #   - NETMON_ALERT_URL=https://gotify.example.com
     #   - NETMON_ALERT_TYPE=gotify
     #   - NETMON_GOTIFY_TOKEN=your-app-token
-    # Default command is 'watch', but you can override:
-    # command: scan --quiet

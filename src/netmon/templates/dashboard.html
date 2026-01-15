@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="{{ refresh_interval }}">
+    <title>Docker Network Monitor</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <h1>Docker Network Monitor</h1>
+        <div class="view-toggle">
+            <button id="btn-graph" class="active" onclick="showView('graph')">Graph View</button>
+            <button id="btn-tree" onclick="showView('tree')">Tree View</button>
+        </div>
+        <div class="refresh-info">
+            Auto-refresh: {{ refresh_interval }}s
+        </div>
+    </div>
+
+    <div class="summary" id="summary">
+        <div class="summary-item">
+            <span class="summary-value" id="network-count">-</span>
+            <span class="summary-label">Networks</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-value" id="container-count">-</span>
+            <span class="summary-label">Containers</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-value" id="conflict-count">-</span>
+            <span class="summary-label">Conflicts</span>
+        </div>
+        <div class="summary-item critical">
+            <span class="summary-value" id="critical-count">-</span>
+            <span class="summary-label">Critical</span>
+        </div>
+        <div class="summary-item high">
+            <span class="summary-value" id="high-count">-</span>
+            <span class="summary-label">High</span>
+        </div>
+        <div class="summary-item warning">
+            <span class="summary-value" id="warning-count">-</span>
+            <span class="summary-label">Warning</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="graph-view" class="view-panel">
+            <div id="network-graph"></div>
+        </div>
+
+        <div id="tree-view" class="view-panel" style="display: none;">
+            <div id="network-tree"></div>
+        </div>
+
+        <div class="conflicts-panel" id="conflicts-panel">
+            <h2>Detected Conflicts</h2>
+            <table id="conflicts-table">
+                <thead>
+                    <tr>
+                        <th>Severity</th>
+                        <th>Network</th>
+                        <th>DNS Name</th>
+                        <th>Containers</th>
+                    </tr>
+                </thead>
+                <tbody id="conflicts-body">
+                </tbody>
+            </table>
+            <div id="no-conflicts" class="no-conflicts" style="display: none;">
+                No conflicts detected
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='graph.js') }}"></script>
+</body>
+</html>
