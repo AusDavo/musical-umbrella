@@ -48,7 +48,7 @@ async function loadConflicts() {
         }
 
         updateSummary(data.summary);
-        renderConflictsTable(data.conflicts);
+        renderConflictsList(data.conflicts);
         renderTree(data.tree);
     } catch (error) {
         console.error('Failed to load conflicts:', error);
@@ -125,28 +125,57 @@ function updateSummary(summary) {
     document.getElementById('warning-count').textContent = summary.warning_count;
 }
 
-function renderConflictsTable(conflicts) {
-    const tbody = document.getElementById('conflicts-body');
+function renderConflictsList(conflicts) {
+    const container = document.getElementById('conflicts-list');
     const noConflicts = document.getElementById('no-conflicts');
-    const table = document.getElementById('conflicts-table');
 
     if (conflicts.length === 0) {
-        table.style.display = 'none';
+        container.style.display = 'none';
         noConflicts.style.display = 'block';
         return;
     }
 
-    table.style.display = 'table';
+    container.style.display = 'block';
     noConflicts.style.display = 'none';
 
-    tbody.innerHTML = conflicts.map(conflict => `
-        <tr>
-            <td class="severity-${conflict.severity}">${conflict.severity.toUpperCase()}</td>
-            <td>${escapeHtml(conflict.network)}</td>
-            <td>${escapeHtml(conflict.dns_name)}</td>
-            <td>${escapeHtml(conflict.containers.join(', '))}</td>
-        </tr>
-    `).join('');
+    container.innerHTML = conflicts.map((conflict, index) => {
+        const remediationHtml = conflict.remediation && conflict.remediation.length > 0
+            ? `<div class="conflict-remediation hidden" id="remediation-${index}">
+                <div class="remediation-title">Recommended Actions:</div>
+                <ol class="remediation-list">
+                    ${conflict.remediation.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+                </ol>
+               </div>`
+            : '';
+
+        const hasRemediation = conflict.remediation && conflict.remediation.length > 0;
+
+        return `
+            <div class="conflict-card severity-${conflict.severity}-card">
+                <div class="conflict-header" ${hasRemediation ? `onclick="toggleRemediation(${index})"` : ''}>
+                    <span class="conflict-severity severity-${conflict.severity}">${conflict.severity.toUpperCase()}</span>
+                    <span class="conflict-dns">${escapeHtml(conflict.dns_name)}</span>
+                    <span class="conflict-network">on ${escapeHtml(conflict.network)}</span>
+                    ${hasRemediation ? '<span class="expand-icon" id="expand-icon-' + index + '">&#9660;</span>' : ''}
+                </div>
+                <div class="conflict-details">
+                    <span class="conflict-containers">Containers: ${escapeHtml(conflict.containers.join(', '))}</span>
+                </div>
+                ${remediationHtml}
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleRemediation(index) {
+    const remediation = document.getElementById(`remediation-${index}`);
+    const icon = document.getElementById(`expand-icon-${index}`);
+    if (remediation) {
+        remediation.classList.toggle('hidden');
+        if (icon) {
+            icon.innerHTML = remediation.classList.contains('hidden') ? '&#9660;' : '&#9650;';
+        }
+    }
 }
 
 function renderTree(tree) {

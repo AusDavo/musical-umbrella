@@ -62,6 +62,7 @@ class Conflict:
     severity: Severity
     containers: list[NetworkNode]
     description: str
+    remediation: list[str]
 
     @property
     def container_names(self) -> list[str]:
@@ -177,13 +178,48 @@ class ConflictDetector:
             f"{container_list}"
         )
 
+        remediation = self._get_duplicate_remediation(network, dns_name, unique_nodes)
+
         return Conflict(
             network=network,
             dns_name=dns_name,
             severity=severity,
             containers=unique_nodes,
             description=description,
+            remediation=remediation,
         )
+
+    def _get_duplicate_remediation(
+        self, network: str, dns_name: str, nodes: list[NetworkNode]
+    ) -> list[str]:
+        """Generate remediation strategies for duplicate DNS conflicts."""
+        remediation = []
+
+        projects = {n.compose_project for n in nodes if n.compose_project}
+
+        if len(projects) > 1:
+            remediation.append(
+                f"Move each stack to its own isolated network instead of sharing '{network}'. "
+                f"Only connect services that need external access to the shared network."
+            )
+
+        remediation.append(
+            f"Rename the service in one of the compose files to use a unique name "
+            f"(e.g., '{dns_name}' -> 'myapp-{dns_name}')."
+        )
+
+        remediation.append(
+            f"Use explicit network aliases in docker-compose.yml to give each service "
+            f"a unique DNS name on the shared network."
+        )
+
+        if dns_name.lower() in GENERIC_NAMES:
+            remediation.append(
+                f"Consider using stack-prefixed names for common services "
+                f"(e.g., 'immich-db', 'seafile-db' instead of just 'db')."
+            )
+
+        return remediation
 
     def _create_generic_name_warning(
         self, network: str, dns_name: str, node: NetworkNode
@@ -195,12 +231,24 @@ class ConflictDetector:
             f"stack with the same service name joins this network."
         )
 
+        project_prefix = node.compose_project or "myapp"
+        suggested_name = f"{project_prefix}-{dns_name}"
+
+        remediation = [
+            f"Rename the service to include a project prefix (e.g., '{suggested_name}').",
+            f"Keep '{node.container_name}' on an isolated network and only expose "
+            f"the application container to '{network}'.",
+            f"Use an explicit network alias in docker-compose.yml to override the "
+            f"DNS name on the shared network.",
+        ]
+
         return Conflict(
             network=network,
             dns_name=dns_name,
             severity=Severity.WARNING,
             containers=[node],
             description=description,
+            remediation=remediation,
         )
 
 

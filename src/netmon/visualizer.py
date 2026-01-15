@@ -158,6 +158,38 @@ class NetworkVisualizer:
 
         self._console.print(table)
 
+        self._render_remediation_section(sorted_conflicts)
+
+    def _render_remediation_section(self, conflicts: list[Conflict]) -> None:
+        """Render remediation recommendations for conflicts."""
+        critical_and_high = [
+            c for c in conflicts if c.severity in (Severity.CRITICAL, Severity.HIGH)
+        ]
+
+        if not critical_and_high:
+            return
+
+        self._console.print()
+        self._console.print("[bold cyan]Recommended Actions[/bold cyan]")
+        self._console.print()
+
+        for i, conflict in enumerate(critical_and_high, 1):
+            severity_style = {
+                Severity.CRITICAL: "bold red",
+                Severity.HIGH: "bold yellow",
+            }.get(conflict.severity, "yellow")
+
+            self._console.print(
+                f"[{severity_style}]{i}. {conflict.dns_name}[/{severity_style}] "
+                f"[dim]on {conflict.network}[/dim]"
+            )
+
+            if conflict.remediation:
+                for j, action in enumerate(conflict.remediation, 1):
+                    self._console.print(f"   [dim]{j}.[/dim] {action}")
+
+            self._console.print()
+
     def render_summary(self, report: ConflictReport) -> None:
         """Render a brief one-line summary."""
         if not report.has_conflicts:

@@ -124,6 +124,7 @@ def create_app() -> Flask:
                     "severity": conflict.severity.value,
                     "containers": conflict.container_names,
                     "description": conflict.description,
+                    "remediation": conflict.remediation,
                 })
 
             tree_data = _build_tree_data(topology, report)
