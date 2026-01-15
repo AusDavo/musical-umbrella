@@ -9,7 +9,7 @@ from flask import Flask, jsonify, render_template
 
 from netmon.conflicts import ConflictDetector, Severity
 from netmon.docker_client import DockerClient
-from netmon.scanner import NetworkScanner, get_all_dns_names
+from netmon.scanner import NetworkScanner, get_all_dns_names, get_dns_name_entries
 
 
 def create_app() -> Flask:
@@ -115,6 +115,10 @@ def create_app() -> Flask:
 
             conflicts = []
             for conflict in report.conflicts:
+                conflicting_names = [
+                    {"container": cn.container_name, "source": cn.source}
+                    for cn in conflict.conflicting_names
+                ]
                 conflicts.append({
                     "network": conflict.network,
                     "dns_name": conflict.dns_name,
@@ -122,6 +126,7 @@ def create_app() -> Flask:
                     "containers": conflict.container_names,
                     "description": conflict.description,
                     "remediation": conflict.remediation,
+                    "conflicting_names": conflicting_names,
                 })
 
             tree_data = _build_tree_data(topology, report)
@@ -215,14 +220,15 @@ def _build_tree_data(topology, report) -> list[dict]:
         }
 
         for container in sorted(nodes, key=lambda n: n.container_name):
-            dns_names = get_all_dns_names(container)
+            dns_entries = get_dns_name_entries(container)
             conflicts = []
-            for name in dns_names:
-                key = (network_name, name)
+            for entry in dns_entries:
+                key = (network_name, entry.name)
                 if key in conflict_lookup:
                     conflicts.append({
-                        "name": name,
+                        "name": entry.name,
                         "severity": conflict_lookup[key].value,
+                        "source": entry.source.value,
                     })
 
             container_data = {

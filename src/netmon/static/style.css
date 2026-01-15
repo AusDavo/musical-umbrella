@@ -346,6 +346,16 @@ body {
     display: block;
 }
 
+.conflicting-name {
+    font-weight: 600;
+    color: #eee;
+}
+
+.conflict-source {
+    color: #4a90d9;
+    font-size: 0.8em;
+}
+
 .conflict-remediation {
     background-color: #0f3460;
     padding: 1rem;

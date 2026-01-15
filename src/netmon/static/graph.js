@@ -232,7 +232,7 @@ function renderConflictsList(conflicts) {
                     ${hasRemediation ? '<span class="expand-icon" id="expand-icon-' + index + '">&#9660;</span>' : ''}
                 </div>
                 <div class="conflict-details">
-                    <span class="conflict-containers">Containers: ${escapeHtml(conflict.containers.join(', '))}</span>
+                    <div class="conflict-containers">${formatConflictingNames(conflict)}</div>
                 </div>
                 ${remediationHtml}
             </div>
@@ -273,9 +273,10 @@ function renderTree(tree) {
                     conflictClass = 'has-conflict';
                 }
 
-                conflictHtml = c.conflicts.map(conf =>
-                    `<div class="tree-container-conflict">Conflict: ${escapeHtml(conf.name)} (${conf.severity})</div>`
-                ).join('');
+                conflictHtml = c.conflicts.map(conf => {
+                    const sourceInfo = conf.source ? ` via ${conf.source}` : '';
+                    return `<div class="tree-container-conflict">Conflict: ${escapeHtml(conf.name)}${sourceInfo} (${conf.severity})</div>`;
+                }).join('');
             }
 
             const details = [];
@@ -311,6 +312,16 @@ function toggleNetwork(header) {
     header.classList.toggle('collapsed');
     const containers = header.nextElementSibling;
     containers.classList.toggle('hidden');
+}
+
+function formatConflictingNames(conflict) {
+    if (conflict.conflicting_names && conflict.conflicting_names.length > 0) {
+        const items = conflict.conflicting_names.map(cn =>
+            `<span class="conflicting-name">${escapeHtml(cn.container)}</span> <span class="conflict-source">(${escapeHtml(cn.source)})</span>`
+        );
+        return `Conflicting: ${items.join(', ')}`;
+    }
+    return `Containers: ${escapeHtml(conflict.containers.join(', '))}`;
 }
 
 function escapeHtml(text) {

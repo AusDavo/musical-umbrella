@@ -3,10 +3,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from netmon.docker_client import ContainerInfo, DockerClient, NetworkInfo
+
+
+class DnsNameSource(Enum):
+    """Source of a DNS name for a container."""
+
+    CONTAINER_NAME = "container name"
+    SERVICE_NAME = "service name"
+    ALIAS = "alias"
+
+
+@dataclass
+class DnsNameEntry:
+    """A DNS name with its source."""
+
+    name: str
+    source: DnsNameSource
+    container_name: str
 
 
 @dataclass
@@ -125,3 +143,41 @@ def get_all_dns_names(node: NetworkNode) -> list[str]:
     names.extend(node.aliases)
 
     return list(set(names))
+
+
+def get_dns_name_entries(node: NetworkNode) -> list[DnsNameEntry]:
+    """Get all DNS names with their sources for a container.
+
+    Returns detailed information about each DNS name including its source type.
+    """
+    entries = []
+    seen_names = set()
+
+    # Container name is always a DNS name
+    entries.append(DnsNameEntry(
+        name=node.container_name,
+        source=DnsNameSource.CONTAINER_NAME,
+        container_name=node.container_name,
+    ))
+    seen_names.add(node.container_name)
+
+    # Service name (from docker-compose)
+    if node.service_name and node.service_name not in seen_names:
+        entries.append(DnsNameEntry(
+            name=node.service_name,
+            source=DnsNameSource.SERVICE_NAME,
+            container_name=node.container_name,
+        ))
+        seen_names.add(node.service_name)
+
+    # Explicit network aliases
+    for alias in node.aliases:
+        if alias not in seen_names:
+            entries.append(DnsNameEntry(
+                name=alias,
+                source=DnsNameSource.ALIAS,
+                container_name=node.container_name,
+            ))
+            seen_names.add(alias)
+
+    return entries

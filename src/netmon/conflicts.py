@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from netmon.scanner import get_all_dns_names
+from netmon.scanner import DnsNameSource, get_all_dns_names, get_dns_name_entries
 
 if TYPE_CHECKING:
-    from netmon.scanner import NetworkNode, NetworkTopology
+    from netmon.scanner import DnsNameEntry, NetworkNode, NetworkTopology
 
 
 class Severity(Enum):
@@ -54,6 +54,14 @@ GENERIC_NAMES = frozenset(
 
 
 @dataclass
+class ConflictingName:
+    """Details about a name involved in a conflict."""
+
+    container_name: str
+    source: str  # "container name", "service name", or "alias"
+
+
+@dataclass
 class Conflict:
     """A detected DNS naming conflict."""
 
@@ -63,6 +71,7 @@ class Conflict:
     containers: list[NetworkNode]
     description: str
     remediation: list[str]
+    conflicting_names: list[ConflictingName] = field(default_factory=list)
 
     @property
     def container_names(self) -> list[str]:
@@ -127,58 +136,89 @@ class ConflictDetector:
         """Check a single network for conflicts."""
         conflicts = []
 
-        dns_name_to_nodes: dict[str, list[NetworkNode]] = {}
+        # Map DNS name -> list of (node, DnsNameEntry)
+        dns_name_to_entries: dict[str, list[tuple[NetworkNode, DnsNameEntry]]] = {}
 
         for node in nodes:
-            for dns_name in get_all_dns_names(node):
-                if dns_name not in dns_name_to_nodes:
-                    dns_name_to_nodes[dns_name] = []
-                dns_name_to_nodes[dns_name].append(node)
+            for entry in get_dns_name_entries(node):
+                if entry.name not in dns_name_to_entries:
+                    dns_name_to_entries[entry.name] = []
+                dns_name_to_entries[entry.name].append((node, entry))
 
-        for dns_name, matching_nodes in dns_name_to_nodes.items():
-            if len(matching_nodes) > 1:
-                unique_containers = {n.container_id for n in matching_nodes}
+        for dns_name, entries in dns_name_to_entries.items():
+            if len(entries) > 1:
+                unique_containers = {node.container_id for node, _ in entries}
                 if len(unique_containers) > 1:
                     conflicts.append(
-                        self._create_duplicate_conflict(network_name, dns_name, matching_nodes)
+                        self._create_duplicate_conflict(network_name, dns_name, entries)
                     )
 
         if self._warn_generic and len(nodes) > 1:
             for node in nodes:
-                for dns_name in get_all_dns_names(node):
-                    if dns_name.lower() in GENERIC_NAMES:
+                for entry in get_dns_name_entries(node):
+                    if entry.name.lower() in GENERIC_NAMES:
                         existing = [
-                            c for c in conflicts if c.dns_name == dns_name and c.network == network_name
+                            c for c in conflicts if c.dns_name == entry.name and c.network == network_name
                         ]
                         if not existing:
                             conflicts.append(
-                                self._create_generic_name_warning(network_name, dns_name, node)
+                                self._create_generic_name_warning(network_name, entry, node)
                             )
 
         return conflicts
 
     def _create_duplicate_conflict(
-        self, network: str, dns_name: str, nodes: list[NetworkNode]
+        self, network: str, dns_name: str, entries: list[tuple[NetworkNode, DnsNameEntry]]
     ) -> Conflict:
         """Create a conflict for duplicate DNS names."""
+        # Get unique nodes
         unique_nodes = []
         seen_ids = set()
-        for node in nodes:
+        for node, _ in entries:
             if node.container_id not in seen_ids:
                 unique_nodes.append(node)
                 seen_ids.add(node.container_id)
 
+        # Build detailed conflicting names list
+        conflicting_names = []
+        seen_container_ids = set()
+        for node, entry in entries:
+            if node.container_id not in seen_container_ids:
+                conflicting_names.append(ConflictingName(
+                    container_name=node.container_name,
+                    source=entry.source.value,
+                ))
+                seen_container_ids.add(node.container_id)
+
+        # Determine severity based on source types
+        sources = {entry.source for _, entry in entries}
         is_exact_name_match = all(node.container_name == dns_name for node in unique_nodes)
 
-        severity = Severity.CRITICAL if is_exact_name_match else Severity.HIGH
+        if is_exact_name_match:
+            severity = Severity.CRITICAL
+        else:
+            severity = Severity.HIGH
 
-        container_list = ", ".join(n.container_name for n in unique_nodes)
+        # Build detailed description showing sources
+        source_descriptions = []
+        for node, entry in entries:
+            if node.container_id in {n.container_id for n in unique_nodes}:
+                source_descriptions.append(f"'{node.container_name}' ({entry.source.value})")
+
+        # Remove duplicates while preserving order
+        seen_desc = set()
+        unique_source_descriptions = []
+        for desc in source_descriptions:
+            if desc not in seen_desc:
+                unique_source_descriptions.append(desc)
+                seen_desc.add(desc)
+
         description = (
-            f"DNS name '{dns_name}' resolves to multiple containers on network '{network}': "
-            f"{container_list}"
+            f"DNS name '{dns_name}' resolves to multiple containers: "
+            f"{', '.join(unique_source_descriptions)}"
         )
 
-        remediation = self._get_duplicate_remediation(network, dns_name, unique_nodes)
+        remediation = self._get_duplicate_remediation(network, dns_name, unique_nodes, sources)
 
         return Conflict(
             network=network,
@@ -187,60 +227,93 @@ class ConflictDetector:
             containers=unique_nodes,
             description=description,
             remediation=remediation,
+            conflicting_names=conflicting_names,
         )
 
     def _get_duplicate_remediation(
-        self, network: str, dns_name: str, nodes: list[NetworkNode]
+        self, network: str, dns_name: str, nodes: list[NetworkNode], sources: set[DnsNameSource]
     ) -> list[str]:
         """Generate remediation strategies for duplicate DNS conflicts."""
         remediation = []
 
         projects = {n.compose_project for n in nodes if n.compose_project}
 
+        # Specific advice based on source types
+        if DnsNameSource.SERVICE_NAME in sources:
+            remediation.append(
+                f"Service name conflict: Rename the 'service:' key in one of the compose files "
+                f"(e.g., '{dns_name}' -> 'myproject-{dns_name}')."
+            )
+
+        if DnsNameSource.ALIAS in sources:
+            remediation.append(
+                f"Alias conflict: Remove or rename the network alias in docker-compose.yml. "
+                f"Check the 'networks:<network>:aliases:' section."
+            )
+
+        if DnsNameSource.CONTAINER_NAME in sources:
+            remediation.append(
+                f"Container name conflict: Use 'container_name:' in docker-compose.yml "
+                f"to set unique container names, or rename the service."
+            )
+
         if len(projects) > 1:
             remediation.append(
-                f"Move each stack to its own isolated network instead of sharing '{network}'. "
+                f"Isolate stacks: Move each stack to its own network instead of sharing '{network}'. "
                 f"Only connect services that need external access to the shared network."
             )
 
-        remediation.append(
-            f"Rename the service in one of the compose files to use a unique name "
-            f"(e.g., '{dns_name}' -> 'myapp-{dns_name}')."
-        )
-
-        remediation.append(
-            f"Use explicit network aliases in docker-compose.yml to give each service "
-            f"a unique DNS name on the shared network."
-        )
-
         if dns_name.lower() in GENERIC_NAMES:
             remediation.append(
-                f"Consider using stack-prefixed names for common services "
-                f"(e.g., 'immich-db', 'seafile-db' instead of just 'db')."
+                f"Use stack-prefixed names for common services "
+                f"(e.g., 'immich-{dns_name}', 'seafile-{dns_name}' instead of just '{dns_name}')."
             )
 
         return remediation
 
     def _create_generic_name_warning(
-        self, network: str, dns_name: str, node: NetworkNode
+        self, network: str, entry: DnsNameEntry, node: NetworkNode
     ) -> Conflict:
         """Create a warning for generic names on shared networks."""
+        dns_name = entry.name
+        source_type = entry.source.value
+
         description = (
             f"Container '{node.container_name}' uses generic DNS name '{dns_name}' "
-            f"on shared network '{network}'. This may cause confusion if another "
-            f"stack with the same service name joins this network."
+            f"(via {source_type}) on shared network '{network}'. This may cause "
+            f"confusion if another stack with the same name joins this network."
         )
 
         project_prefix = node.compose_project or "myapp"
         suggested_name = f"{project_prefix}-{dns_name}"
 
-        remediation = [
-            f"Rename the service to include a project prefix (e.g., '{suggested_name}').",
+        remediation = []
+
+        if entry.source == DnsNameSource.SERVICE_NAME:
+            remediation.append(
+                f"Rename the service in docker-compose.yml "
+                f"(e.g., '{dns_name}' -> '{suggested_name}')."
+            )
+        elif entry.source == DnsNameSource.ALIAS:
+            remediation.append(
+                f"Remove or rename the alias '{dns_name}' in the networks section "
+                f"of docker-compose.yml."
+            )
+        else:
+            remediation.append(
+                f"Set a unique container_name in docker-compose.yml "
+                f"(e.g., container_name: '{suggested_name}')."
+            )
+
+        remediation.append(
             f"Keep '{node.container_name}' on an isolated network and only expose "
-            f"the application container to '{network}'.",
-            f"Use an explicit network alias in docker-compose.yml to override the "
-            f"DNS name on the shared network.",
-        ]
+            f"the application container to '{network}'."
+        )
+
+        conflicting_names = [ConflictingName(
+            container_name=node.container_name,
+            source=source_type,
+        )]
 
         return Conflict(
             network=network,
@@ -249,6 +322,7 @@ class ConflictDetector:
             containers=[node],
             description=description,
             remediation=remediation,
+            conflicting_names=conflicting_names,
         )
 
 
