@@ -2,7 +2,6 @@
 name = "docker-netmon"
 version = "0.1.0"
 description = "Docker network monitor - detect DNS conflicts and visualize network topology"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "docker>=7.0.0",
