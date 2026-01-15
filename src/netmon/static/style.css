@@ -50,6 +50,38 @@ body {
     border-color: #e94560;
 }
 
+.refresh-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.refresh-btn {
+    padding: 0.5rem 1.25rem;
+    border: 1px solid #4a90d9;
+    background-color: #4a90d9;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+    background-color: #3a7bc8;
+    border-color: #3a7bc8;
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.last-updated {
+    font-size: 0.85rem;
+    color: #888;
+}
+
 .refresh-info {
     font-size: 0.85rem;
     color: #888;

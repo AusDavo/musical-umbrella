@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +26,7 @@ def create_app() -> Flask:
     @app.route("/")
     def dashboard() -> str:
         """Render the main dashboard."""
-        refresh_interval = int(os.environ.get("NETMON_REFRESH_INTERVAL", "5"))
-        return render_template("dashboard.html", refresh_interval=refresh_interval)
+        return render_template("dashboard.html")
 
     @app.route("/api/topology")
     def api_topology() -> tuple[Any, int]:

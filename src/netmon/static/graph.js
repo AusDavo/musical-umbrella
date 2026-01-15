@@ -1,12 +1,17 @@
 // Docker Network Monitor - Graph Visualization
 
 let network = null;
+let currentView = 'graph';
+let isRefreshing = false;
 
-function showView(view) {
+// View management with persistence
+function showView(view, save = true) {
     const graphView = document.getElementById('graph-view');
     const treeView = document.getElementById('tree-view');
     const btnGraph = document.getElementById('btn-graph');
     const btnTree = document.getElementById('btn-tree');
+
+    currentView = view;
 
     if (view === 'graph') {
         graphView.style.display = 'block';
@@ -19,9 +24,21 @@ function showView(view) {
         btnGraph.classList.remove('active');
         btnTree.classList.add('active');
     }
+
+    if (save) {
+        localStorage.setItem('netmon-view', view);
+    }
 }
 
-async function loadTopology() {
+function restoreView() {
+    const savedView = localStorage.getItem('netmon-view');
+    if (savedView === 'tree' || savedView === 'graph') {
+        showView(savedView, false);
+    }
+}
+
+// Data loading
+async function loadTopology(preservePositions = false) {
     try {
         const response = await fetch('/api/topology');
         const data = await response.json();
@@ -31,7 +48,7 @@ async function loadTopology() {
             return;
         }
 
-        renderGraph(data);
+        renderGraph(data, preservePositions);
     } catch (error) {
         console.error('Failed to load topology:', error);
     }
@@ -55,64 +72,120 @@ async function loadConflicts() {
     }
 }
 
-function renderGraph(data) {
+// Manual refresh
+async function refreshData() {
+    if (isRefreshing) return;
+
+    const btn = document.getElementById('btn-refresh');
+    btn.disabled = true;
+    btn.textContent = 'Refreshing...';
+    isRefreshing = true;
+
+    try {
+        await Promise.all([
+            loadTopology(true),
+            loadConflicts()
+        ]);
+        updateLastRefreshed();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Refresh';
+        isRefreshing = false;
+    }
+}
+
+function updateLastRefreshed() {
+    const el = document.getElementById('last-updated');
+    const now = new Date();
+    const time = now.toLocaleTimeString();
+    el.textContent = `Updated: ${time}`;
+}
+
+// Graph rendering
+function renderGraph(data, preservePositions = false) {
     const container = document.getElementById('network-graph');
 
     const nodes = new vis.DataSet(data.nodes);
     const edges = new vis.DataSet(data.edges);
 
-    const options = {
-        nodes: {
-            font: {
-                size: 14,
-                color: '#ffffff'
-            },
-            borderWidth: 2,
-            shadow: true
-        },
-        edges: {
-            width: 2,
-            color: {
-                color: '#0f3460',
-                highlight: '#4a90d9'
-            },
-            smooth: {
-                type: 'continuous'
+    if (network && preservePositions) {
+        // Get current positions before updating
+        const positions = network.getPositions();
+
+        // Update node positions from saved state
+        nodes.forEach(node => {
+            if (positions[node.id]) {
+                node.x = positions[node.id].x;
+                node.y = positions[node.id].y;
             }
-        },
-        groups: {
-            network: {
-                shape: 'box',
+        });
+
+        // Update data without re-running physics
+        network.setData({ nodes, edges });
+        network.setOptions({ physics: { enabled: false } });
+
+        // Re-enable physics briefly to settle new nodes, then disable
+        setTimeout(() => {
+            network.setOptions({ physics: { enabled: true } });
+            setTimeout(() => {
+                network.setOptions({ physics: { enabled: false } });
+            }, 1000);
+        }, 100);
+    } else {
+        const options = {
+            nodes: {
                 font: {
-                    size: 16,
-                    bold: true
+                    size: 14,
+                    color: '#ffffff'
+                },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                color: {
+                    color: '#0f3460',
+                    highlight: '#4a90d9'
+                },
+                smooth: {
+                    type: 'continuous'
                 }
             },
-            container: {
-                shape: 'ellipse'
-            }
-        },
-        physics: {
-            stabilization: {
-                iterations: 100
+            groups: {
+                network: {
+                    shape: 'box',
+                    font: {
+                        size: 16,
+                        bold: true
+                    }
+                },
+                container: {
+                    shape: 'ellipse'
+                }
             },
-            barnesHut: {
-                gravitationalConstant: -3000,
-                centralGravity: 0.3,
-                springLength: 150,
-                springConstant: 0.04
+            physics: {
+                stabilization: {
+                    iterations: 100
+                },
+                barnesHut: {
+                    gravitationalConstant: -3000,
+                    centralGravity: 0.3,
+                    springLength: 150,
+                    springConstant: 0.04
+                }
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 100
             }
-        },
-        interaction: {
-            hover: true,
-            tooltipDelay: 100
-        }
-    };
+        };
 
-    if (network) {
-        network.setData({ nodes, edges });
-    } else {
         network = new vis.Network(container, { nodes, edges }, options);
+
+        // Disable physics after initial stabilization
+        network.once('stabilized', () => {
+            network.setOptions({ physics: { enabled: false } });
+        });
     }
 }
 
@@ -248,6 +321,8 @@ function escapeHtml(text) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    restoreView();
     loadTopology();
     loadConflicts();
+    updateLastRefreshed();
 });

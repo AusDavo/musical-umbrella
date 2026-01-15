@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="{{ refresh_interval }}">
     <title>Docker Network Monitor</title>
     <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -15,8 +14,9 @@
             <button id="btn-graph" class="active" onclick="showView('graph')">Graph View</button>
             <button id="btn-tree" onclick="showView('tree')">Tree View</button>
         </div>
-        <div class="refresh-info">
-            Auto-refresh: {{ refresh_interval }}s
+        <div class="refresh-controls">
+            <button id="btn-refresh" class="refresh-btn" onclick="refreshData()">Refresh</button>
+            <span id="last-updated" class="last-updated"></span>
         </div>
     </div>
 
