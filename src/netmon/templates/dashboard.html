@@ -38,7 +38,7 @@
         </div>
         <div class="summary-item warning">
             <span class="summary-value" id="warning-count">-</span>
-            <span class="summary-label">Warning</span>
+            <span class="summary-label">Potential</span>
         </div>
     </div>
 
@@ -48,10 +48,18 @@
         </div>
 
         <div class="conflicts-panel" id="conflicts-panel">
-            <h2>Detected Conflicts</h2>
-            <div id="conflicts-list"></div>
+            <div class="conflicts-section" id="active-conflicts-section">
+                <h2>Active Conflicts</h2>
+                <p class="section-explanation">These DNS names are claimed by multiple containers on the same network. Docker's DNS resolution may return inconsistent results.</p>
+                <div id="active-conflicts-list"></div>
+            </div>
+            <div class="conflicts-section" id="potential-issues-section">
+                <h2>Potential Issues</h2>
+                <p class="section-explanation">These containers use common names that could conflict if another stack with similar naming joins the network.</p>
+                <div id="potential-issues-list"></div>
+            </div>
             <div id="no-conflicts" class="no-conflicts" style="display: none;">
-                No conflicts detected
+                No conflicts or potential issues detected
             </div>
         </div>
     </div>

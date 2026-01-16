@@ -57,45 +57,73 @@ function updateSummary(summary) {
 }
 
 function renderConflictsList(conflicts) {
-    const container = document.getElementById('conflicts-list');
+    const activeSection = document.getElementById('active-conflicts-section');
+    const activeList = document.getElementById('active-conflicts-list');
+    const potentialSection = document.getElementById('potential-issues-section');
+    const potentialList = document.getElementById('potential-issues-list');
     const noConflicts = document.getElementById('no-conflicts');
 
+    // Separate conflicts by type
+    const activeConflicts = conflicts.filter(c => c.severity === 'critical' || c.severity === 'high');
+    const potentialIssues = conflicts.filter(c => c.severity === 'warning');
+
     if (conflicts.length === 0) {
-        container.style.display = 'none';
+        activeSection.style.display = 'none';
+        potentialSection.style.display = 'none';
         noConflicts.style.display = 'block';
         return;
     }
 
-    container.style.display = 'block';
     noConflicts.style.display = 'none';
 
-    container.innerHTML = conflicts.map((conflict, index) => {
-        const remediationHtml = conflict.remediation && conflict.remediation.length > 0
-            ? `<div class="conflict-remediation hidden" id="remediation-${index}">
-                <div class="remediation-title">Recommended Actions:</div>
-                <ol class="remediation-list">
-                    ${conflict.remediation.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
-                </ol>
-               </div>`
-            : '';
+    // Render active conflicts
+    if (activeConflicts.length > 0) {
+        activeSection.style.display = 'block';
+        activeList.innerHTML = activeConflicts.map((conflict, index) =>
+            renderConflictCard(conflict, index)
+        ).join('');
+    } else {
+        activeSection.style.display = 'none';
+    }
 
-        const hasRemediation = conflict.remediation && conflict.remediation.length > 0;
+    // Render potential issues
+    if (potentialIssues.length > 0) {
+        potentialSection.style.display = 'block';
+        const offset = activeConflicts.length;
+        potentialList.innerHTML = potentialIssues.map((conflict, index) =>
+            renderConflictCard(conflict, offset + index)
+        ).join('');
+    } else {
+        potentialSection.style.display = 'none';
+    }
+}
 
-        return `
-            <div class="conflict-card severity-${conflict.severity}-card">
-                <div class="conflict-header" ${hasRemediation ? `onclick="toggleRemediation(${index})"` : ''}>
-                    <span class="conflict-severity severity-${conflict.severity}">${conflict.severity.toUpperCase()}</span>
-                    <span class="conflict-dns">${escapeHtml(conflict.dns_name)}</span>
-                    <span class="conflict-network">on ${escapeHtml(conflict.network)}</span>
-                    ${hasRemediation ? '<span class="expand-icon" id="expand-icon-' + index + '">&#9660;</span>' : ''}
-                </div>
-                <div class="conflict-details">
-                    <div class="conflict-containers">${formatConflictingNames(conflict)}</div>
-                </div>
-                ${remediationHtml}
+function renderConflictCard(conflict, index) {
+    const remediationHtml = conflict.remediation && conflict.remediation.length > 0
+        ? `<div class="conflict-remediation hidden" id="remediation-${index}">
+            <div class="remediation-title">Recommended Actions:</div>
+            <ol class="remediation-list">
+                ${conflict.remediation.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+            </ol>
+           </div>`
+        : '';
+
+    const hasRemediation = conflict.remediation && conflict.remediation.length > 0;
+
+    return `
+        <div class="conflict-card severity-${conflict.severity}-card">
+            <div class="conflict-header" ${hasRemediation ? `onclick="toggleRemediation(${index})"` : ''}>
+                <span class="conflict-severity severity-${conflict.severity}">${conflict.severity.toUpperCase()}</span>
+                <span class="conflict-dns">${escapeHtml(conflict.dns_name)}</span>
+                <span class="conflict-network">on ${escapeHtml(conflict.network)}</span>
+                ${hasRemediation ? '<span class="expand-icon" id="expand-icon-' + index + '">&#9660;</span>' : ''}
             </div>
-        `;
-    }).join('');
+            <div class="conflict-details">
+                <div class="conflict-containers">${formatConflictingNames(conflict)}</div>
+            </div>
+            ${remediationHtml}
+        </div>
+    `;
 }
 
 function toggleRemediation(index) {

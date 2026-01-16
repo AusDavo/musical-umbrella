@@ -220,10 +220,29 @@ body {
     overflow-y: auto;
 }
 
+.conflicts-section {
+    margin-bottom: 1.5rem;
+}
+
+.conflicts-section:last-of-type {
+    margin-bottom: 0;
+}
+
 .conflicts-panel h2 {
     font-size: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
     color: #e94560;
+}
+
+.section-explanation {
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+
+#potential-issues-section h2 {
+    color: #ffc107;
 }
 
 .conflict-card {
