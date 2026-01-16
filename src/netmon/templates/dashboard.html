@@ -4,16 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Docker Network Monitor</title>
-    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="header">
         <h1>Docker Network Monitor</h1>
-        <div class="view-toggle">
-            <button id="btn-graph" class="active" onclick="showView('graph')">Graph View</button>
-            <button id="btn-tree" onclick="showView('tree')">Tree View</button>
-        </div>
         <div class="refresh-controls">
             <button id="btn-refresh" class="refresh-btn" onclick="refreshData()">Refresh</button>
             <span id="last-updated" class="last-updated"></span>
@@ -48,11 +43,7 @@
     </div>
 
     <div class="content">
-        <div id="graph-view" class="view-panel">
-            <div id="network-graph"></div>
-        </div>
-
-        <div id="tree-view" class="view-panel" style="display: none;">
+        <div class="topology-panel">
             <div id="network-tree"></div>
         </div>
 
@@ -65,6 +56,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='graph.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

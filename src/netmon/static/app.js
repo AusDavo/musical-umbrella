@@ -1,59 +1,8 @@
-// Docker Network Monitor - Graph Visualization
+// Docker Network Monitor
 
-let network = null;
-let currentView = 'graph';
 let isRefreshing = false;
 
-// View management with persistence
-function showView(view, save = true) {
-    const graphView = document.getElementById('graph-view');
-    const treeView = document.getElementById('tree-view');
-    const btnGraph = document.getElementById('btn-graph');
-    const btnTree = document.getElementById('btn-tree');
-
-    currentView = view;
-
-    if (view === 'graph') {
-        graphView.style.display = 'block';
-        treeView.style.display = 'none';
-        btnGraph.classList.add('active');
-        btnTree.classList.remove('active');
-    } else {
-        graphView.style.display = 'none';
-        treeView.style.display = 'block';
-        btnGraph.classList.remove('active');
-        btnTree.classList.add('active');
-    }
-
-    if (save) {
-        localStorage.setItem('netmon-view', view);
-    }
-}
-
-function restoreView() {
-    const savedView = localStorage.getItem('netmon-view');
-    if (savedView === 'tree' || savedView === 'graph') {
-        showView(savedView, false);
-    }
-}
-
 // Data loading
-async function loadTopology(preservePositions = false) {
-    try {
-        const response = await fetch('/api/topology');
-        const data = await response.json();
-
-        if (data.error) {
-            console.error('Error loading topology:', data.error);
-            return;
-        }
-
-        renderGraph(data, preservePositions);
-    } catch (error) {
-        console.error('Failed to load topology:', error);
-    }
-}
-
 async function loadConflicts() {
     try {
         const response = await fetch('/api/conflicts');
@@ -82,10 +31,7 @@ async function refreshData() {
     isRefreshing = true;
 
     try {
-        await Promise.all([
-            loadTopology(true),
-            loadConflicts()
-        ]);
+        await loadConflicts();
         updateLastRefreshed();
     } finally {
         btn.disabled = false;
@@ -99,94 +45,6 @@ function updateLastRefreshed() {
     const now = new Date();
     const time = now.toLocaleTimeString();
     el.textContent = `Updated: ${time}`;
-}
-
-// Graph rendering
-function renderGraph(data, preservePositions = false) {
-    const container = document.getElementById('network-graph');
-
-    const nodes = new vis.DataSet(data.nodes);
-    const edges = new vis.DataSet(data.edges);
-
-    if (network && preservePositions) {
-        // Get current positions before updating
-        const positions = network.getPositions();
-
-        // Update node positions from saved state
-        nodes.forEach(node => {
-            if (positions[node.id]) {
-                node.x = positions[node.id].x;
-                node.y = positions[node.id].y;
-            }
-        });
-
-        // Update data without re-running physics
-        network.setData({ nodes, edges });
-        network.setOptions({ physics: { enabled: false } });
-
-        // Re-enable physics briefly to settle new nodes, then disable
-        setTimeout(() => {
-            network.setOptions({ physics: { enabled: true } });
-            setTimeout(() => {
-                network.setOptions({ physics: { enabled: false } });
-            }, 1000);
-        }, 100);
-    } else {
-        const options = {
-            nodes: {
-                font: {
-                    size: 14,
-                    color: '#ffffff'
-                },
-                borderWidth: 2,
-                shadow: true
-            },
-            edges: {
-                width: 2,
-                color: {
-                    color: '#0f3460',
-                    highlight: '#4a90d9'
-                },
-                smooth: {
-                    type: 'continuous'
-                }
-            },
-            groups: {
-                network: {
-                    shape: 'box',
-                    font: {
-                        size: 16,
-                        bold: true
-                    }
-                },
-                container: {
-                    shape: 'ellipse'
-                }
-            },
-            physics: {
-                stabilization: {
-                    iterations: 100
-                },
-                barnesHut: {
-                    gravitationalConstant: -3000,
-                    centralGravity: 0.3,
-                    springLength: 150,
-                    springConstant: 0.04
-                }
-            },
-            interaction: {
-                hover: true,
-                tooltipDelay: 100
-            }
-        };
-
-        network = new vis.Network(container, { nodes, edges }, options);
-
-        // Disable physics after initial stabilization
-        network.once('stabilized', () => {
-            network.setOptions({ physics: { enabled: false } });
-        });
-    }
 }
 
 function updateSummary(summary) {
@@ -332,8 +190,6 @@ function escapeHtml(text) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    restoreView();
-    loadTopology();
     loadConflicts();
     updateLastRefreshed();
 });

@@ -1,4 +1,4 @@
-"""Web dashboard for Docker network visualization."""
+"""Web dashboard for Docker network monitoring."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from flask import Flask, jsonify, render_template
 
 from netmon.conflicts import ConflictDetector, Severity
 from netmon.docker_client import DockerClient
-from netmon.scanner import NetworkScanner, get_all_dns_names, get_dns_name_entries
+from netmon.scanner import NetworkScanner, get_dns_name_entries
 
 
 def create_app() -> Flask:
@@ -27,80 +27,6 @@ def create_app() -> Flask:
     def dashboard() -> str:
         """Render the main dashboard."""
         return render_template("dashboard.html")
-
-    @app.route("/api/topology")
-    def api_topology() -> tuple[Any, int]:
-        """Return network topology as JSON for vis.js."""
-        try:
-            client = DockerClient()
-            scanner = NetworkScanner(client)
-            detector = ConflictDetector()
-
-            topology = scanner.scan()
-            report = detector.analyze(topology)
-
-            conflict_lookup = _build_conflict_lookup(report)
-
-            nodes = []
-            edges = []
-            node_id = 0
-
-            network_ids = {}
-            for network_name in sorted(topology.networks.keys()):
-                network_ids[network_name] = node_id
-                nodes.append({
-                    "id": node_id,
-                    "label": network_name,
-                    "group": "network",
-                    "shape": "box",
-                    "color": {"background": "#4a90d9", "border": "#2c5aa0"},
-                    "font": {"color": "#ffffff"},
-                })
-                node_id += 1
-
-            for network_name, network_nodes in topology.networks.items():
-                for container in network_nodes:
-                    dns_names = get_all_dns_names(container)
-                    has_conflict = any(
-                        (network_name, name) in conflict_lookup for name in dns_names
-                    )
-
-                    conflict_severity = None
-                    if has_conflict:
-                        for name in dns_names:
-                            key = (network_name, name)
-                            if key in conflict_lookup:
-                                sev = conflict_lookup[key]
-                                if conflict_severity is None or _severity_order(sev) < _severity_order(conflict_severity):
-                                    conflict_severity = sev
-
-                    color = _get_node_color(conflict_severity)
-
-                    container_node_id = node_id
-                    nodes.append({
-                        "id": container_node_id,
-                        "label": container.container_name,
-                        "title": _build_tooltip(container, network_name, conflict_lookup),
-                        "group": "container",
-                        "shape": "ellipse",
-                        "color": color,
-                    })
-                    node_id += 1
-
-                    edges.append({
-                        "from": network_ids[network_name],
-                        "to": container_node_id,
-                    })
-
-            client.close()
-
-            return jsonify({
-                "nodes": nodes,
-                "edges": edges,
-            }), 200
-
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/conflicts")
     def api_conflicts() -> tuple[Any, int]:
@@ -169,41 +95,6 @@ def _severity_order(severity: Severity) -> int:
         Severity.HIGH: 1,
         Severity.WARNING: 2,
     }.get(severity, 3)
-
-
-def _get_node_color(severity: Severity | None) -> dict:
-    """Get node color based on conflict severity."""
-    if severity == Severity.CRITICAL:
-        return {"background": "#dc3545", "border": "#a71d2a"}
-    elif severity == Severity.HIGH:
-        return {"background": "#fd7e14", "border": "#c96209"}
-    elif severity == Severity.WARNING:
-        return {"background": "#ffc107", "border": "#d39e00"}
-    else:
-        return {"background": "#28a745", "border": "#1e7e34"}
-
-
-def _build_tooltip(container, network_name: str, conflict_lookup: dict) -> str:
-    """Build HTML tooltip for a container node."""
-    lines = [
-        f"<b>{container.container_name}</b>",
-        f"IP: {container.ip_address}",
-    ]
-
-    if container.service_name:
-        lines.append(f"Service: {container.service_name}")
-
-    if container.aliases:
-        lines.append(f"Aliases: {', '.join(container.aliases)}")
-
-    dns_names = get_all_dns_names(container)
-    for name in dns_names:
-        key = (network_name, name)
-        if key in conflict_lookup:
-            severity = conflict_lookup[key]
-            lines.append(f"<span style='color: red'>Conflict: {name} ({severity.value})</span>")
-
-    return "<br>".join(lines)
 
 
 def _build_tree_data(topology, report) -> list[dict]:
